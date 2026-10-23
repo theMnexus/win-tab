@@ -25,7 +25,7 @@ the same license, [FSL-1.1-MIT](#license).
 - Windows on other Spaces and displays are listed. Picking one brings it to you.
 - Apps with no open windows show as a compact strip.
 - Hover buttons on a tile: close every window of the app, or send it to the background.
-- The picker opens on the display you are working on.
+- The picker opens on the display under the mouse pointer. Settings › Picker can switch it to the display with the focused window, or the main display.
 - Animation speed from Off to 10×, and a Liquid Glass background on macOS 26.
 - Can be switched off in Settings › Picker, which hands ⌘-Tab back to macOS.
 
