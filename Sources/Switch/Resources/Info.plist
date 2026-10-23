@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>win-tab</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>win-tab</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.3.17</string>
+	<key>CFBundleVersion</key>
+	<string>31</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>win-tab asks Music, Spotify and your browser what is playing and sends play, pause and next, for Now Playing on the notch and the Dock.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>win-tab listens while you practise reading a sentence aloud in the Translate tab, to check each word. Nothing is recorded or sent anywhere.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>win-tab recognises your speech on this Mac to score your pronunciation in the Translate tab.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>win-tab captures window thumbnails so you can see what you're switching to.</string>
+</dict>
+</plist>
