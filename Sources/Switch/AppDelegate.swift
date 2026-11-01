@@ -411,6 +411,7 @@ extension AppDelegate: NSWindowDelegate {
 
 final class SwitcherWindow: NSPanel {
     private let model: SwitchModel
+    private var windowsSink: AnyCancellable?
 
     init(model: SwitchModel) {
         self.model = model
@@ -436,6 +437,21 @@ final class SwitcherWindow: NSPanel {
         host.layer?.masksToBounds = true
         contentView = host
         applyContentSize()
+        // An app moved to NO WINDOWS (moon, close-all) or a refresh while open changes how many
+        // tiles and chips there are. Refit then, or the strip is cut off or leaves a gap.
+        windowsSink = model.$windows
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refitKeepingCenter() }
+    }
+
+    /// Resizes the open picker to its list without moving its centre. No-op when the size holds.
+    private func refitKeepingCenter() {
+        guard model.visible, isVisible else { return }
+        let old = frame
+        applyContentSize(for: screen)
+        guard frame.size != old.size else { return }
+        setFrameOrigin(NSPoint(x: (old.midX - frame.width / 2).rounded(), y: (old.midY - frame.height / 2).rounded()))
     }
 
     override var canBecomeKey: Bool { false }

@@ -53,16 +53,14 @@ enum OCRCapture {
         }
     }
 
-    /// The recognizer loads its models on first use, ~30 s on this Mac (the standalone tool paid
-    /// that on every press, being a fresh process each time); later runs take ~150 ms. Pay it
-    /// once, in the background, a while after launch, when the hotkey is bound.
+    /// Revision 2 loads its model on first use, about 15 s on this Mac. Later reads take about
+    /// 30 ms. Pay the first load in the background, a while after launch, when the hotkey is bound.
     static func prewarm() {
         guard HotkeyConfig.shared[.ocr] != nil else { return }
         Task.detached(priority: .background) {
             try? await Task.sleep(for: .seconds(20))
-            // macOS drops the models after a while (a 2-day-old win-tab took ~37 s to read again).
-            // A small read every few minutes keeps them loaded, or pays the reload here, in the
-            // background, rather than on the next capture. ~0.1 s of CPU per read.
+            // A small read every few minutes keeps revision 2 loaded, or pays the reload here
+            // instead of on the next capture. About 0.1 s of CPU per read.
             while !Task.isCancelled {
                 await warm()
                 let saving = await MainActor.run { EnergySaver.isOn }
@@ -147,81 +145,58 @@ enum OCRCapture {
         return text.isEmpty ? .noText : .text(text)
     }
 
-    /// Accurate first, fast if that finds nothing.
+    /// Accurate first. Fast only when accurate finds nothing.
     ///
-    /// Detect reads Vietnamese and English first (~0.3 s; those models stay loaded system-wide)
-    /// and turns to language detection only when that leaves text unread — Chinese, Japanese,
-    /// Korean, Thai come back as nothing at all. Detection's own models get dropped by macOS
-    /// after a while and take ~35 s to load again, which made every capture slow.
+    /// macOS 27's default text model (revision 3, and `RecognizeTextRequest`) stalls 15 to 40 s,
+    /// then fails with e5rt error 13 for the rest of the process. Revision 2 stays near 30 ms
+    /// after its first load and keeps Vietnamese diacritics. Chinese is a second revision-2 pass,
+    /// and only when the Latin pass is empty or below 0.5 confidence.
     nonisolated static func recognize(_ image: CGImage, options: OCROptions = .current) async -> String {
-        var found: [OCRLayout.Item]
-        if options.languages == .automatic {
-            var latin = options
-            latin.languages = .vietnameseEnglish
-            async let regions = textRegions(image)
-            found = await observe(image, options: latin, level: .accurate)
-            let unread = await regions.filter { region in
-                !found.contains { $0.box.insetBy(dx: -4, dy: -4).contains(CGPoint(x: region.midX, y: region.midY)) }
-            }.count
-            if found.isEmpty || (unread >= 3 && unread > found.count) {
-                log.info("\(unread) text regions unread in Vietnamese/English; detecting the language")
-                found = await observe(image, options: options, level: .accurate)
-            }
-        } else {
-            found = await observe(image, options: options, level: .accurate)
+        let latin = options.languages == .automatic ? options.withLanguages(.vietnameseEnglish) : options
+        var found = await observe(image, options: latin, level: .accurate)
+        if options.languages == .automatic, found.isEmpty || found.allSatisfy({ $0.confidence < 0.5 }) {
+            let chinese = await observe(image, options: options.withScript(.chinese), level: .accurate)
+            if chinese.contains(where: { $0.confidence >= 0.5 }) { found = chinese }
         }
-        if found.isEmpty { found = await observe(image, options: options, level: .fast) }
+        if found.isEmpty { found = await observe(image, options: latin, level: .fast) }
         return OCRLayout.text(found, layout: options.layout)
-    }
-
-    /// Where text is, in pixels (top-left origin), without reading it: language-free and quick
-    /// (a few ms, ~40 ms for a full Retina screen).
-    nonisolated private static func textRegions(_ image: CGImage) async -> [CGRect] {
-        let size = CGSize(width: image.width, height: image.height)
-        func pixels(_ r: CGRect) -> CGRect {
-            CGRect(x: r.minX * size.width, y: (1 - r.maxY) * size.height, width: r.width * size.width, height: r.height * size.height)
-        }
-        if #available(macOS 15.0, *) {
-            return ((try? await DetectTextRectanglesRequest().perform(on: image)) ?? []).map { pixels($0.boundingBox.cgRect) }
-        }
-        let request = VNDetectTextRectanglesRequest()
-        try? VNImageRequestHandler(cgImage: image).perform([request])
-        return (request.results ?? []).map { pixels($0.boundingBox) }
     }
 
     /// Recognised lines with their boxes in pixels, top-left origin.
     nonisolated private static func observe(_ image: CGImage, options: OCROptions, level: OCROptions.Level) async -> [OCRLayout.Item] {
         let size = CGSize(width: image.width, height: image.height)
         func pixels(_ r: CGRect) -> CGRect {
-            CGRect(x: r.minX * size.width, y: (1 - r.maxY) * size.height, width: r.width * size.width, height: r.height * size.height)
-        }
-        if #available(macOS 15.0, *) {
-            var request = RecognizeTextRequest()
-            request.recognitionLevel = level == .accurate ? .accurate : .fast
-            request.usesLanguageCorrection = options.correction
-            switch options.languages {
-            case .automatic: request.automaticallyDetectsLanguage = true
-            case .vietnameseEnglish: request.recognitionLanguages = [Locale.Language(identifier: "vi-VT"), Locale.Language(identifier: "en-US")]
-            case .english: request.recognitionLanguages = [Locale.Language(identifier: "en-US")]
-            }
-            var observations = (try? await request.perform(on: image)) ?? []
-            if observations.isEmpty, options.languages != .automatic {
-                // A language the recognizer can't load: retry with its defaults.
-                request.recognitionLanguages = []
-                observations = (try? await request.perform(on: image)) ?? []
-            }
-            return observations.compactMap { o in o.topCandidates(1).first.map { OCRLayout.Item(box: pixels(o.boundingBox.cgRect), text: $0.string) } }
+            CGRect(x: r.minX * size.width, y: (1 - r.maxY) * size.height,
+                   width: r.width * size.width, height: r.height * size.height)
         }
         let request = VNRecognizeTextRequest()
+        if VNRecognizeTextRequest.supportedRevisions.contains(2) {
+            request.revision = 2
+        }
         request.recognitionLevel = level == .accurate ? .accurate : .fast
         request.usesLanguageCorrection = options.correction
-        switch options.languages {
-        case .automatic: request.automaticallyDetectsLanguage = true
-        case .vietnameseEnglish: request.recognitionLanguages = ["vi-VT", "en-US"]
-        case .english: request.recognitionLanguages = ["en-US"]
+        switch options.script {
+        case .chinese:
+            request.recognitionLanguages = ["zh-Hans", "zh-Hant"]
+        case .settings:
+            switch options.languages {
+            case .automatic, .vietnameseEnglish:
+                request.recognitionLanguages = ["vi-VT", "en-US"]
+            case .english:
+                request.recognitionLanguages = ["en-US"]
+            }
         }
-        try? VNImageRequestHandler(cgImage: image).perform([request])
-        return (request.results ?? []).compactMap { o in o.topCandidates(1).first.map { OCRLayout.Item(box: pixels(o.boundingBox), text: $0.string) } }
+        do {
+            try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+        } catch {
+            log.error("read failed: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+        return (request.results ?? []).compactMap { observation in
+            observation.topCandidates(1).first.map {
+                OCRLayout.Item(box: pixels(observation.boundingBox), text: $0.string, confidence: $0.confidence)
+            }
+        }
     }
 }
 
@@ -252,22 +227,36 @@ struct OCROptions: Sendable {
     static let layoutKey = "switch.ocr.layout"
     static let showOnNotchKey = "switch.ocr.showOnNotch"
 
+    /// Which revision-2 model to run. Chinese is not a Settings choice. Automatic tries it
+    /// only after Vietnamese and English come back empty or unsure.
+    enum Script: Sendable { case settings, chinese }
+
     var languages: Languages
     var correction: Bool
     var layout: Layout
+    var script: Script = .settings
+
+    func withLanguages(_ languages: Languages) -> OCROptions {
+        OCROptions(languages: languages, correction: correction, layout: layout, script: .settings)
+    }
+
+    func withScript(_ script: Script) -> OCROptions {
+        OCROptions(languages: languages, correction: correction, layout: layout, script: script)
+    }
 
     static var current: OCROptions {
         let d = UserDefaults.standard
         return OCROptions(languages: Languages(rawValue: d.string(forKey: languagesKey) ?? "") ?? .automatic,
                           correction: d.object(forKey: correctionKey) as? Bool ?? true,
-                          layout: Layout(rawValue: d.string(forKey: layoutKey) ?? "") ?? .lines)
+                          layout: Layout(rawValue: d.string(forKey: layoutKey) ?? "") ?? .lines,
+                          script: .settings)
     }
 }
 
 /// Reading order for recognised lines: columns left to right, rows top to bottom; boxes on one
 /// row are a table row (tab-separated) when far apart, words of one line when close.
 enum OCRLayout {
-    struct Item { let box: CGRect; let text: String }
+    struct Item { let box: CGRect; let text: String; let confidence: Float }
 
     static func text(_ items: [Item], layout: OCROptions.Layout) -> String {
         guard !items.isEmpty else { return "" }

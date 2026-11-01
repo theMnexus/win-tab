@@ -363,11 +363,19 @@ final class SwitchModel: ObservableObject {
     /// Shows the app as one chip in the NO WINDOWS strip instead of its windows.
     private func moveToWindowless(_ target: WindowInfo) {
         let pid = target.pid
-        windows.removeAll { $0.pid == pid }
+        let filtered = filteredWindows
+        let keptID = filtered.indices.contains(selected) && filtered[selected].pid != pid ? filtered[selected].id : nil
+        var list = windows.filter { $0.pid != pid }
         if SwitchPreferences.shared.includeWindowlessApps && mode == .allWindows {
-            windows.append(WindowInfo(id: CGWindowID(0xF0000000) | CGWindowID(UInt32(bitPattern: Int32(pid))), pid: pid,
-                                      appName: target.appName, bounds: .zero, title: "", isWindowless: true, bundleID: target.bundleID))
+            let chip = WindowInfo(id: CGWindowID(0xF0000000) | CGWindowID(UInt32(bitPattern: Int32(pid))), pid: pid,
+                                  appName: target.appName, bounds: .zero, title: "", isWindowless: true, bundleID: target.bundleID)
+            // Same place the next refresh puts it (windowless apps sort by name), so it doesn't jump.
+            let at = list.firstIndex { $0.isWindowless && $0.appName > chip.appName } ?? list.endIndex
+            list.insert(chip, at: at)
         }
+        windows = list
+        // Keep the highlight on the window it was on; indices shift when the app's tiles go.
+        if let keptID, let i = filteredWindows.firstIndex(where: { $0.id == keptID }) { selected = i }
         removeFromPicker { _ in false }
     }
 
