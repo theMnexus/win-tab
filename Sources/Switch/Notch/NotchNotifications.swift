@@ -114,7 +114,15 @@ final class NotificationFeed: ObservableObject {
 
     private init() {
         let d = UserDefaults.standard
-        enabled = d.object(forKey: Self.key("enabled")) as? Bool ?? true
+        // Earlier builds had a second switch beside the tab: off left the tab's bell showing.
+        // Fold it into the tab, so one switch hides every bell and stops the watcher.
+        if d.object(forKey: Self.key("enabled")) as? Bool == false {
+            var tabs = SwitchPreferences.shared.notchTabs
+            tabs.remove(NotchTab.notifications.rawValue)
+            SwitchPreferences.shared.notchTabs = tabs
+            d.set(true, forKey: Self.key("enabled"))
+        }
+        enabled = true
         hiddenApps = Set(d.stringArray(forKey: Self.key("hiddenApps")) ?? [])
         // Earlier builds had one on/off switch for popups.
         let oldPopup = d.object(forKey: Self.key("showOnNotch")) as? Bool
@@ -130,6 +138,20 @@ final class NotificationFeed: ObservableObject {
     }
 
     func start() { refreshActive() }
+
+    /// The one switch for notifications, in the notch's bell and Settings: the Notifications tab.
+    /// Off removes the tab, so no bell shows anywhere, and the watcher and popups stop.
+    var isOn: Bool {
+        get { enabled && SwitchPreferences.shared.notchTabs.contains(NotchTab.notifications.rawValue) }
+        set {
+            objectWillChange.send()
+            var tabs = SwitchPreferences.shared.notchTabs
+            if newValue { tabs.insert(NotchTab.notifications.rawValue) } else { tabs.remove(NotchTab.notifications.rawValue) }
+            SwitchPreferences.shared.notchTabs = tabs
+            if newValue && !enabled { enabled = true }
+            refreshActive()
+        }
+    }
 
     /// Watching only while the switch is on and the Notifications tab is shown: a tab that is
     /// switched off reads nothing and pops nothing.
@@ -466,7 +488,7 @@ struct NotchNotificationsView: View {
             if !feed.enabled {
                 VStack(spacing: 8) {
                     placeholder("bell.slash", "Notifications are off", "Nothing shows on the notch until you turn them back on.")
-                    Button("Turn on") { feed.enabled = true }.controlSize(.small)
+                    Button("Turn on") { feed.isOn = true }.controlSize(.small)
                 }
             } else if feed.access == .needsFullDiskAccess {
                 VStack(spacing: 8) {

@@ -109,7 +109,7 @@ struct NotchSettingsTab: View {
                                isOn: $prefs.notchStatusWithActivity)
             }
         }
-        if prefs.notchTabs.contains("notifications") { NotchNotificationSettings() }
+        NotchNotificationSettings()
         if prefs.notchTabs.contains("system") { NotchSystemSettings() }
         if prefs.notchTabs.contains("ports") { NotchPortsSettings() }
         if prefs.notchTabs.contains("shelf") { NotchFilesSettings() }
@@ -182,8 +182,9 @@ private struct NotchNotificationSettings: View {
     var body: some View {
         SettingsSection(title: "Notifications", subtitle: "Notifications from your other apps, in the notch. Read on this Mac from macOS's own list; nothing leaves it.") {
             SettingsCard {
-                SettingsToggle(title: "Show notifications", detail: "The Notifications tab and alerts on the notch.", isOn: $feed.enabled)
-                if feed.enabled {
+                SettingsToggle(title: "Show notifications", detail: "The Notifications tab and alerts on the notch.",
+                               isOn: Binding(get: { feed.isOn }, set: { feed.isOn = $0 }))
+                if feed.isOn {
                     SettingsRow(title: "Pop up as", detail: "On the notch: Banner (who and what), Compact (the wings), Icon (just the app's icon). Under the menu bar: Glass card, Pill, Vivid. Off: only in the tab.") {
                         Picker("", selection: $feed.popup) {
                             ForEach([NotificationFeed.Popup.banner, .compact, .icon]) { Text($0.label).tag($0) }

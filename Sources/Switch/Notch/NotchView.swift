@@ -348,12 +348,15 @@ struct NotchExpandedContent: View {
                 }
             }
             Spacer(minLength: geometry.hasNotch ? geometry.notch.width : 12)
-            // Notifications on or off from the notch itself (the same switch as Settings › Notch).
-            // Only with the Notifications tab: a tab switched off shows no icon.
-            if tabs.contains(.notifications) {
-                NotchIconButton(symbol: feed.enabled ? "bell.fill" : "bell.slash", selected: feed.enabled, tint: tint,
-                                help: feed.enabled ? "Notifications are on: click to turn them off" : "Notifications are off: click to turn them on") {
-                    feed.enabled.toggle()
+            // Turns notifications off from the notch (the same switch as Settings › Notch). Off removes
+            // the Notifications tab, so this bell and the tab's bell both go; Settings turns it back on.
+            if feed.isOn {
+                NotchIconButton(symbol: "bell.fill", selected: true, tint: tint,
+                                help: "Notifications are on: click to turn them off (Settings › Notch turns them back on)") {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        if state.tab == .notifications { state.tab = .home }
+                        feed.isOn = false
+                    }
                 }
             }
             if prefs.notchShowKeepAwake {
