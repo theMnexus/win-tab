@@ -1,4 +1,5 @@
 import AppKit
+import CoreML
 import ImageIO
 import os
 import Vision
@@ -53,14 +54,15 @@ enum OCRCapture {
         }
     }
 
-    /// Revision 2 loads its model on first use, about 15 s on this Mac. Later reads take about
-    /// 30 ms. Pay the first load in the background, a while after launch, when the hotkey is bound.
+    /// On the CPU, revision 2's first read is about 0.1 s. Now and then macOS rebuilds its text
+    /// assets system-wide and that first read takes about 20 s. Pay it in the background, a
+    /// while after launch, when the hotkey is bound.
     static func prewarm() {
         guard HotkeyConfig.shared[.ocr] != nil else { return }
         Task.detached(priority: .background) {
             try? await Task.sleep(for: .seconds(20))
-            // A small read every few minutes keeps revision 2 loaded, or pays the reload here
-            // instead of on the next capture. About 0.1 s of CPU per read.
+            // A small read every few minutes keeps revision 2 loaded, or pays a reload here
+            // instead of on the next capture. About 40 ms of CPU per read.
             while !Task.isCancelled {
                 await warm()
                 let saving = await MainActor.run { EnergySaver.isOn }
@@ -148,8 +150,8 @@ enum OCRCapture {
     /// Accurate first. Fast only when accurate finds nothing.
     ///
     /// macOS 27's default text model (revision 3, and `RecognizeTextRequest`) stalls 15 to 40 s,
-    /// then fails with e5rt error 13 for the rest of the process. Revision 2 stays near 30 ms
-    /// after its first load and keeps Vietnamese diacritics. Chinese is a second revision-2 pass,
+    /// then fails with e5rt error 13 for the rest of the process. Revision 2 on the CPU stays near
+    /// 40 ms and keeps Vietnamese diacritics (see `runOnCPU`). Chinese is a second revision-2 pass,
     /// and only when the Latin pass is empty or below 0.5 confidence.
     nonisolated static func recognize(_ image: CGImage, options: OCROptions = .current) async -> String {
         let latin = options.languages == .automatic ? options.withLanguages(.vietnameseEnglish) : options
@@ -169,32 +171,51 @@ enum OCRCapture {
             CGRect(x: r.minX * size.width, y: (1 - r.maxY) * size.height,
                    width: r.width * size.width, height: r.height * size.height)
         }
-        let request = VNRecognizeTextRequest()
-        if VNRecognizeTextRequest.supportedRevisions.contains(2) {
-            request.revision = 2
-        }
-        request.recognitionLevel = level == .accurate ? .accurate : .fast
-        request.usesLanguageCorrection = options.correction
-        switch options.script {
-        case .chinese:
-            request.recognitionLanguages = ["zh-Hans", "zh-Hant"]
-        case .settings:
-            switch options.languages {
-            case .automatic, .vietnameseEnglish:
-                request.recognitionLanguages = ["vi-VT", "en-US"]
-            case .english:
-                request.recognitionLanguages = ["en-US"]
+        func makeRequest(onCPU: Bool) -> VNRecognizeTextRequest {
+            let request = VNRecognizeTextRequest()
+            if VNRecognizeTextRequest.supportedRevisions.contains(2) {
+                request.revision = 2
             }
+            request.recognitionLevel = level == .accurate ? .accurate : .fast
+            request.usesLanguageCorrection = options.correction
+            // Revision 2 has no "vi-VT" (it lists en, fr, it, de, es, pt, zh). Its Latin model
+            // still reads Vietnamese diacritics, so Vietnamese and English share "en-US".
+            request.recognitionLanguages = options.script == .chinese ? ["zh-Hans", "zh-Hant"] : ["en-US"]
+            if onCPU { runOnCPU(request) }
+            return request
         }
+        var request = makeRequest(onCPU: true)
         do {
             try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
         } catch {
-            log.error("read failed: \(error.localizedDescription, privacy: .public)")
-            return []
+            // CPU is the normal path; the default devices are only a second try.
+            log.error("CPU read failed, retrying on default devices: \(error.localizedDescription, privacy: .public)")
+            request = makeRequest(onCPU: false)
+            do {
+                try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+            } catch {
+                log.error("read failed: \(error.localizedDescription, privacy: .public)")
+                return []
+            }
         }
         return (request.results ?? []).compactMap { observation in
             observation.topCandidates(1).first.map {
                 OCRLayout.Item(box: pixels(observation.boundingBox), text: $0.string, confidence: $0.confidence)
+            }
+        }
+    }
+
+    /// Runs every stage of the request on the CPU.
+    ///
+    /// On the Neural Engine, macOS 27.2 sometimes reloads the text model in a long-running process
+    /// and then fails every read with "E5RT Error ... (Code: 13)" until the app quits (seen after
+    /// 41 h: 136 failed reads in a row). On the CPU revision 2 gives the same text in 40-110 ms and
+    /// needs no Neural Engine compile.
+    nonisolated private static func runOnCPU(_ request: VNRecognizeTextRequest) {
+        guard let stages = try? request.supportedComputeStageDevices else { return }
+        for (stage, devices) in stages {
+            if let cpu = devices.first(where: { if case .cpu = $0 { return true } else { return false } }) {
+                request.setComputeDevice(cpu, for: stage)
             }
         }
     }
@@ -207,7 +228,7 @@ struct OCROptions: Sendable {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .automatic: return "Detect (any language)"
+            case .automatic: return "Auto (Latin + Chinese)"
             case .vietnameseEnglish: return "Vietnamese + English"
             case .english: return "English"
             }

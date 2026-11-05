@@ -270,7 +270,7 @@ struct SettingsView: View {
                 section("Text from screen") {
                     VStack(spacing: 0) {
                         row(title: "Languages",
-                            detail: "Detect reads any language macOS knows (Chinese, Japanese, Korean, Thai, Russian…). Pick Vietnamese + English for the best accents on those two.") {
+                            detail: "Auto reads Latin script (Vietnamese, English, French, German, Spanish…) and falls back to Chinese. Japanese, Korean, Thai and Russian are not read.") {
                             Picker("", selection: $ocrLanguages) {
                                 ForEach(OCROptions.Languages.allCases) { Text($0.label).tag($0) }
                             }

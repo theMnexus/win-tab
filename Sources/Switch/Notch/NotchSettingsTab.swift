@@ -109,7 +109,7 @@ struct NotchSettingsTab: View {
                                isOn: $prefs.notchStatusWithActivity)
             }
         }
-        NotchNotificationSettings()
+        if prefs.notchTabs.contains("notifications") { NotchNotificationSettings() }
         if prefs.notchTabs.contains("system") { NotchSystemSettings() }
         if prefs.notchTabs.contains("ports") { NotchPortsSettings() }
         if prefs.notchTabs.contains("shelf") { NotchFilesSettings() }
@@ -125,8 +125,10 @@ struct NotchSettingsTab: View {
                 tabToggle("translate", "Translate tab", "⌃⌥C translates the selected text; IPA, listening and speaking practice, a phrase book.")
                 tabToggle("ports", "Ports tab", "Dev servers listening on a port: folder, branch, memory; open or stop them.")
                 SettingsDivider()
-                SettingsToggle(title: "Clipboard history", detail: "Saved on this Mac only; password-manager copies are skipped.", isOn: $prefs.notchClipboardHistory)
-                if prefs.notchClipboardHistory {
+                if prefs.notchTabs.contains("clipboard") {
+                    SettingsToggle(title: "Clipboard history", detail: "Saved on this Mac only; password-manager copies are skipped.", isOn: $prefs.notchClipboardHistory)
+                }
+                if prefs.notchTabs.contains("clipboard") && prefs.notchClipboardHistory {
                     SettingsSegmented(title: "Keep clipboard", detail: "Older clips are removed; pinned clips stay until you unpin them.",
                                       selection: $prefs.notchClipboardRetention, options: SwitchPreferences.ClipboardRetention.allCases,
                                       label: \.label, width: 220)
@@ -136,10 +138,13 @@ struct NotchSettingsTab: View {
                 SettingsToggle(title: "Keep Awake button", isOn: $prefs.notchShowKeepAwake)
             }
             HStack {
-                Text("\(shelf.urls.count) on the Shelf · \(clipboard.clips.count) clips").font(.system(size: 11)).foregroundStyle(.secondary)
+                let clipsOn = prefs.notchTabs.contains("clipboard")
+                Text("\(shelf.urls.count) on the Shelf" + (clipsOn ? " · \(clipboard.clips.count) clips" : "")).font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer()
                 Button("Clear Shelf") { shelf.clear() }.controlSize(.small).disabled(shelf.urls.isEmpty)
-                Button("Clear Clipboard") { clipboard.clearUnpinned() }.controlSize(.small).disabled(clipboard.clips.isEmpty)
+                if clipsOn {
+                    Button("Clear Clipboard") { clipboard.clearUnpinned() }.controlSize(.small).disabled(clipboard.clips.isEmpty)
+                }
             }
         }
     }

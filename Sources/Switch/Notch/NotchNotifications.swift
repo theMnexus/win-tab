@@ -129,12 +129,24 @@ final class NotificationFeed: ObservableObject {
         clearedBefore = Date(timeIntervalSince1970: d.double(forKey: Self.key("clearedBefore")))
     }
 
-    func start() { restart() }
+    func start() { refreshActive() }
+
+    /// Watching only while the switch is on and the Notifications tab is shown: a tab that is
+    /// switched off reads nothing and pops nothing.
+    private var active: Bool { enabled && SwitchPreferences.shared.notchTabs.contains(NotchTab.notifications.rawValue) }
+    private var watching = false
+
+    /// Called when Settings change; restarts only when on/off actually changed.
+    func refreshActive() {
+        guard active != watching else { return }
+        restart()
+    }
 
     private func restart() {
         watcher?.cancel()
         watcher = nil
-        guard enabled else { threads = []; return }
+        watching = active
+        guard watching else { threads = []; return }
         reload()
         watch()
     }

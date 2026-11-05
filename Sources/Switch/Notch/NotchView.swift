@@ -210,7 +210,7 @@ enum NotchActivity {
         let prefs = SwitchPreferences.shared
         if prefs.notchShowActivity {
             if NowPlayingMonitor.shared.track?.playing == true { return .music }
-            if NotchTimer.shared.isRunning { return .timer }
+            if NotchTimer.shared.isRunning, prefs.notchTabs.contains(NotchTab.timer.rawValue) { return .timer }
         }
         return prefs.notchStatusItems.isEmpty ? .none : .status
     }
@@ -349,9 +349,12 @@ struct NotchExpandedContent: View {
             }
             Spacer(minLength: geometry.hasNotch ? geometry.notch.width : 12)
             // Notifications on or off from the notch itself (the same switch as Settings › Notch).
-            NotchIconButton(symbol: feed.enabled ? "bell.fill" : "bell.slash", selected: feed.enabled, tint: tint,
-                            help: feed.enabled ? "Notifications are on: click to turn them off" : "Notifications are off: click to turn them on") {
-                feed.enabled.toggle()
+            // Only with the Notifications tab: a tab switched off shows no icon.
+            if tabs.contains(.notifications) {
+                NotchIconButton(symbol: feed.enabled ? "bell.fill" : "bell.slash", selected: feed.enabled, tint: tint,
+                                help: feed.enabled ? "Notifications are on: click to turn them off" : "Notifications are off: click to turn them on") {
+                    feed.enabled.toggle()
+                }
             }
             if prefs.notchShowKeepAwake {
                 NotchIconButton(symbol: keepAwake.isOn ? "cup.and.saucer.fill" : "cup.and.saucer", selected: keepAwake.isOn,

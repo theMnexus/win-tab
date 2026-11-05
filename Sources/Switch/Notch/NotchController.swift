@@ -239,7 +239,10 @@ final class NotchController {
         }
         if islands.map(\.geometry.panelFrame) != wantedScreens.map({ NotchGeometry(screen: $0).panelFrame }) { rebuild() }
         NowPlayingMonitor.shared.setActive(true, for: "notch")
-        ClipboardHistory.shared.setActive(prefs.notchClipboardHistory)
+        // A tab switched off does no work: no clipboard polling, no countdown in the closed island.
+        ClipboardHistory.shared.setActive(prefs.notchClipboardHistory && prefs.notchTabs.contains(NotchTab.clipboard.rawValue))
+        if !prefs.notchTabs.contains(NotchTab.timer.rawValue), NotchTimer.shared.isRunning { NotchTimer.shared.stop() }
+        NotificationFeed.shared.refreshActive()
         installMonitors()
     }
 

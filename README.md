@@ -23,7 +23,7 @@ the same license, [FSL-1.1-MIT](#license).
 - 1 to 9 picks a tile. Arrow keys, or H J K L, move the selection.
 - ⌘W closes the window, ⌘Q quits the app, ⌘H hides it, Return switches, Esc cancels.
 - Windows on other Spaces and displays are listed. Picking one brings it to you.
-- Apps with no open windows show as a compact strip.
+- Apps with no open windows show as full tiles with the app icon in place of a preview. Settings › Picker can shrink them to a compact strip.
 - Hover buttons on a tile: close every window of the app, or send it to the background.
 - The picker opens on the display under the mouse pointer. Settings › Picker can switch it to the display with the focused window, or the main display.
 - Animation speed from Off to 10×, and a Liquid Glass background on macOS 26.
@@ -53,11 +53,13 @@ On a Mac with a notch the island sits on it. Other displays get a small pill at 
 | Files | Convert, compress and rename images, video, audio and PDFs |
 | Translate | Translate the selected text (⌃⌥C) |
 
+Each tab can be switched off in Settings › Notch. A tab that is off shows no icon and does no work in the background.
+
 ### Text from screen (⌘⇧2)
 
 Drag over any part of the screen. The text in it is copied to the clipboard.
 
-- Detects the language: Vietnamese, English, Chinese, Japanese, Korean, Thai, Russian and more.
+- Reads Latin script (Vietnamese with diacritics, English, French, German, Spanish…) and Chinese. Japanese, Korean, Thai and Russian are not read.
 - Keeps line order across columns. Tables keep a Tab between cells.
 - Runs on device with Apple's Vision framework. A read takes about 0.2 s.
 

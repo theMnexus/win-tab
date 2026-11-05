@@ -674,14 +674,15 @@ final class SwitchPreferences: ObservableObject {
         didSet { UserDefaults.standard.set(shiftTapReverses, forKey: SwitchPreferences.shiftTapReversesKey) }
     }
 
-    /// ⌘-Tab: apps without windows as small icons in one strip instead of full tiles.
+    /// ⌘-Tab: apps without windows as small icons in one strip instead of full tiles. Off by default:
+    /// they show as full tiles with the app icon in place of a preview (no capture, no extra work).
     @Published var compactWindowlessApps: Bool {
         didSet { UserDefaults.standard.set(compactWindowlessApps, forKey: SwitchPreferences.compactWindowlessAppsKey) }
     }
 
     /// Window mode with compact windowless apps on: a strip of small icons in the grid, slim rows in the list.
     nonisolated static func compactsWindowless(mode: HotkeyManager.Mode) -> Bool {
-        mode == .allWindows && ((UserDefaults.standard.object(forKey: compactWindowlessAppsKey) as? Bool) ?? true)
+        mode == .allWindows && ((UserDefaults.standard.object(forKey: compactWindowlessAppsKey) as? Bool) ?? false)
     }
 
     @Published var hideMinimizedWindows: Bool {
@@ -838,7 +839,7 @@ final class SwitchPreferences: ObservableObject {
         customDockAllDisplays = d.bool(forKey: Self.customDockAllDisplaysKey)
         customDockUseOwnItems = d.bool(forKey: Self.customDockUseOwnItemsKey)
         customDockEntries = d.data(forKey: Self.customDockEntriesKey).flatMap { try? JSONDecoder().decode([DockEntry].self, from: $0) } ?? []
-        compactWindowlessApps = (d.object(forKey: Self.compactWindowlessAppsKey) as? Bool) ?? true
+        compactWindowlessApps = (d.object(forKey: Self.compactWindowlessAppsKey) as? Bool) ?? false
         notchEnabled = (d.object(forKey: Self.notchEnabledKey) as? Bool) ?? true
         // The older on/off for other displays maps to "every display".
         notchDisplays = NotchDisplays(rawValue: d.string(forKey: Self.notchDisplaysKey) ?? "")

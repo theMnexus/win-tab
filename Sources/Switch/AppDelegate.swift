@@ -169,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { OCRCapture.run() }
         }
         OCRCapture.prewarm()
+        HealthLog.start()
         hotkey.onFileDrop = { [weak self] in
             MainActor.assumeIsolated {
                 FinderSelection.read { urls in
